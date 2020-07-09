@@ -36,9 +36,10 @@ def parse_config(logger=None):
             if len(pairedsects) % 2:
                 if logger:
                     logger.error('Unpaired Queue and Topic sections')
+                    raise SystemExit(1)
                 else:
                     sys.stderr.write('Unpaired Queue and Topic sections\n')
-                raise SystemExit(1)
+                    raise SystemExit(1)
 
             commonsects = [s.lower() for s in config.sections() if '_' not in s]
             diff = reqsections.difference(set(commonsects + pairedsects))
@@ -61,10 +62,11 @@ def parse_config(logger=None):
                     except UnknownTimeZoneError as e:
                         if logger:
                             logger.error('Unknown timezone defined: {0}\n'.format(str(e)))
-                            raise SystemExit(1)
                         else:
                             sys.stderr.write('Unknown timezone defined: {0}\n'.format(str(e)))
+                        if reload is False:
                             raise SystemExit(1)
+
                 if section.startswith('Queue_'):
                     dirqopts = dict()
                     qname = section.split('_', 1)[1].lower()
@@ -101,30 +103,34 @@ def parse_config(logger=None):
                         queues[k]['rate'] % topics[k]['bulk']:
                     if logger:
                         logger.error('queue_%s: Rate should be multiple of BulkSize' % k)
+                        raise SystemExit(1)
                     else:
                         sys.stderr.write('queue_%s: Rate should be multiple of BulkSize\n' % k)
-                    raise SystemExit(1)
+                        raise SystemExit(1)
 
                 if topics[k]['avro'] and not topics[k].get('avroschema', None):
                     if logger:
                         logger.error('topic_%s: AvroSchema not defined' % k)
+                        raise SystemExit(1)
                     else:
                         sys.stderr.write('topic_%s: AvroSchema not defined\n' % k)
-                    raise SystemExit(1)
+                        raise SystemExit(1)
 
-            if all([confopts['general']['publishmsgfile'] == False, confopts['general']['publishargomessaging'] == False]):
+            if all([confopts['general']['publishmsgfile'] is False, confopts['general']['publishargomessaging'] is False]):
                 if logger:
                     logger.error('One publisher must be enabled')
+                    raise SystemExit(1)
                 else:
                     sys.stderr.write('One publisher must be enabled')
-                raise SystemExit(1)
+                    raise SystemExit(1)
 
             if all([confopts['general']['publishmsgfile'], confopts['general']['publishargomessaging']]):
                 if logger:
                     logger.error('Only one enabled publisher allowed at a time')
+                    raise SystemExit(1)
                 else:
                     sys.stderr.write('Only one enabled publisher allowed at a time')
-                raise SystemExit(1)
+                    raise SystemExit(1)
 
             confopts['queues'] = queues
             confopts['topics'] = topics
@@ -133,9 +139,10 @@ def parse_config(logger=None):
         else:
             if logger:
                 logger.error('Missing %s' % conf)
+                raise SystemExit(1)
             else:
                 sys.stderr.write('Missing %s\n' % conf)
-            raise SystemExit(1)
+                raise SystemExit(1)
 
     except (ConfigParser.NoOptionError, ConfigParser.NoSectionError) as e:
         if logger:
@@ -150,9 +157,10 @@ def parse_config(logger=None):
             if logger:
                 logger.error(e.filename + ' is not a valid configuration file')
                 logger.error(' '.join(e.args))
+                raise SystemExit(1)
             else:
                 sys.stderr.write(e.filename + ' is not a valid configuration file\n')
                 sys.stderr.write(' '.join(e.args) + '\n')
-        raise SystemExit(1)
+                raise SystemExit(1)
 
     return confopts

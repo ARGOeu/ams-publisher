@@ -28,25 +28,29 @@ class ConsumerQueue(StatSig, Process):
         self.sess_consumed = 0
 
         self.seenmsgs = set()
-        self.dirq = DQS(path=self.shared.queue['directory'])
         self.inmemq = deque()
-        self.pubnumloop = 1 if self.shared.topic['bulk'] > self.shared.queue['rate'] \
-                          else self.shared.queue['rate'] / self.shared.topic['bulk']
-        self.shared.runtime.update(inmemq=self.inmemq,
-                                   pubnumloop=self.pubnumloop, dirq=self.dirq,
-                                   filepublisher=False)
-        self.publisher = self.shared.runtime['publisher'](events, worker=worker)
-        self.purger = Purger(events, worker=worker)
+        self.setup()
+        self.purger = Purger(self.events, worker=worker)
 
     def cleanup(self):
         self.unlock_dirq_msgs(self.seenmsgs)
 
+    def setup(self):
+        self.dirq = DQS(path=self.shared.queue['directory'])
+        self.pubnumloop = 1 if self.shared.topic['bulk'] > self.shared.queue['rate'] \
+                            else self.shared.queue['rate'] / self.shared.topic['bulk']
+        self.shared.runtime.update(inmemq=self.inmemq,
+                                    pubnumloop=self.pubnumloop,
+                                    dirq=self.dirq, filepublisher=False)
+        self.publisher = self.shared.runtime['publisher'](self.events, worker=self.name)
+
     def run(self):
-        termev = self.events['term-'+self.name]
-        usr1ev = self.events['usr1-'+self.name]
-        periodev = self.events['period-'+self.name]
-        lck = self.events['lck-'+self.name]
-        evgup = self.events['giveup-'+self.name]
+        termev = self.events['term-' + self.name]
+        usr1ev = self.events['usr1-' + self.name]
+        periodev = self.events['period-' + self.name]
+        hup = self.events['hup-' + self.name]
+        lck = self.events['lck-' + self.name]
+        evgup = self.events['giveup-' + self.name]
 
         while True:
             try:

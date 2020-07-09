@@ -133,7 +133,7 @@ def daemon_start(context_daemon, restart=False):
 
     context_daemon.signal_map = {
         signal.SIGTERM: sigtermhandle,
-        signal.SIGUSR1: sigusrhandle
+        signal.SIGUSR1: sigusrhandle,
     }
 
     uid, gid = get_userids(shared.general['runasuser'])
