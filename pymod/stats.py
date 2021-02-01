@@ -11,7 +11,86 @@ from threading import Thread
 from multiprocessing import Process
 from argo_nagios_ams_publisher.shared import Shared
 
-maxcmdlength = 128
+MAXCMDLENGTH = 128
+STATSOCK = '/run/argo-nagios-ams-publisher/sock'
+
+
+def query_stats(last_minutes):
+    def parse_result(query):
+        try:
+            w, r = query.split(b'+')
+
+            w = w.split(b':')[1]
+            r = int(r.split(b':')[1])
+
+        except (ValueError, KeyError):
+            return (w, 'error')
+
+        return (w, r)
+
+    shared = Shared()
+
+    maxcmdlength = 128
+    query_consumed, query_published = '', ''
+
+    for w in shared.workers:
+        query_consumed += 'w:{0}+g:consumed{1} '.format(w, last_minutes)
+
+    for w in shared.workers:
+        query_published += 'w:{0}+g:published{1} '.format(w, last_minutes)
+
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.setblocking(0)
+        sock.settimeout(15)
+
+        sock.connect(STATSOCK)
+        sock.send(query_published.encode(), maxcmdlength)
+        data = sock.recv(maxcmdlength)
+        for answer in data.split():
+            if answer.startswith(b't:'):
+                continue
+            w, r = parse_result(answer)
+            shared.log.info('worker:{0} published:{1}'.format(w.decode(), r))
+        sock.close()
+
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.setblocking(0)
+        sock.settimeout(15)
+        sock.connect(STATSOCK)
+        sock.send(query_consumed.encode(), maxcmdlength)
+        data = sock.recv(maxcmdlength)
+        for answer in data.split(b' '):
+            if answer.startswith(b't:'):
+                continue
+            w, r = parse_result(answer)
+            shared.log.info('worker:{0} consumed:{1}'.format(w.decode(), r))
+        sock.close()
+
+    except socket.timeout as e:
+        shared.log.error('Socket response timeout after 15s')
+
+    except socket.error as e:
+        shared.log.error('Socket error: {0}'.format(str(e)))
+
+    finally:
+        sock.close()
+
+
+def setup_statssocket(uid, gid):
+    shared = Shared()
+
+    if os.path.exists(STATSOCK):
+        os.unlink(STATSOCK)
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.bind(STATSOCK)
+        os.chown(STATSOCK, uid, gid)
+    except socket.error as e:
+        shared.log.error('Error setting up socket: %s - %s' % (STATSOCK, str(e)))
+        raise SystemExit(1)
+
+    return sock
 
 
 class StatSig(object):
@@ -115,16 +194,16 @@ class StatSock(Process):
         try:
             self.sock.listen(1)
         except socket.error as m:
-            self.shared.log.error('Cannot initialize Stats socket %s - %s' % (self.shared.general['statsocket'], repr(m)))
+            self.shared.log.error('Cannot initialize Stats socket %s - %s' % (STATSOCK, repr(m)))
             raise SystemExit(1)
 
     def _cleanup(self):
         self.sock.close()
-        os.unlink(self.shared.general['statsocket'])
+        os.unlink(STATSOCK)
         raise SystemExit(0)
 
     def parse_cmd(self, cmd):
-        m = re.findall(r'w:\w+\+g:\w+', cmd)
+        m = re.findall(r'w:\w+\+g:\w+', cmd.decode())
         queries = list()
 
         if m:
@@ -182,11 +261,11 @@ class StatSock(Process):
                 event = self.poller.poll(float(self.shared.runtime['evsleep'] * 1000))
                 if len(event) > 0 and event[0][1] & select.POLLIN:
                     conn, addr = self.sock.accept()
-                    data = conn.recv(maxcmdlength)
+                    data = conn.recv(MAXCMDLENGTH)
                     q = self.parse_cmd(data)
                     if q:
                         a = self.answer(q)
-                        conn.send(a, maxcmdlength)
+                        conn.send(a.encode(), MAXCMDLENGTH)
                 if self.events['term-stats'].is_set():
                     self.shared.log.info('Stats received SIGTERM')
                     self.events['term-stats'].clear()

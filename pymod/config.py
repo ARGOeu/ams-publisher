@@ -1,4 +1,4 @@
-import ConfigParser
+import configparser
 import sys
 from pytz import timezone, UnknownTimeZoneError
 
@@ -9,7 +9,7 @@ def get_queue_granul(queue):
     confopts = parse_config()
     is_queue_found = False
 
-    for k, v in confopts['queues'].iteritems():
+    for k, v in confopts['queues'].items():
         if confopts['queues'][k]['directory'].startswith(queue):
             is_queue_found = True
             break
@@ -29,7 +29,7 @@ def parse_config(logger=None):
     confopts = dict()
 
     try:
-        config = ConfigParser.ConfigParser()
+        config = configparser.ConfigParser()
         if config.read(conf):
             pairedsects = ['{0}_'.format(s.lower().split('_', 1)[0]) for s in config.sections() if '_' in s]
 
@@ -55,7 +55,6 @@ def parse_config(logger=None):
                     confopts['general'].update({'publishmsgfile': eval(config.get(section, 'PublishMsgFile'))})
                     confopts['general'].update({'publishmsgfiledir': config.get(section, 'PublishMsgFileDir')})
                     confopts['general'].update({'publishargomessaging': eval(config.get(section, 'PublishArgoMessaging'))})
-                    confopts['general'].update({'statsocket': config.get(section, 'StatSocket')})
                     confopts['general'].update({'timezone': config.get(section, 'TimeZone')})
                     try:
                         tz = timezone(confopts['general']['timezone'])
@@ -95,9 +94,9 @@ def parse_config(logger=None):
                     topts['sleepretry'] = config.getint(section, 'SleepRetry')
                     topics[tname] = topts
 
-            for k, v in queues.iteritems():
+            for k, v in queues.items():
                 if k not in topics:
-                    raise ConfigParser.NoSectionError('No topic topic_%s defined' % k)
+                    raise configparser.NoSectionError('No topic topic_%s defined' % k)
 
                 if topics[k]['bulk'] < queues[k]['rate'] and \
                         queues[k]['rate'] % topics[k]['bulk']:
@@ -144,7 +143,7 @@ def parse_config(logger=None):
                 sys.stderr.write('Missing %s\n' % conf)
                 raise SystemExit(1)
 
-    except (ConfigParser.NoOptionError, ConfigParser.NoSectionError) as e:
+    except (configparser.NoOptionError, configparser.NoSectionError) as e:
         if logger:
             logger.error(e)
             raise SystemExit(1)
@@ -152,7 +151,7 @@ def parse_config(logger=None):
             sys.stderr.write(str(e) + '\n')
             raise SystemExit(1)
 
-    except (ConfigParser.MissingSectionHeaderError, ConfigParser.ParsingError, SystemExit) as e:
+    except (configparser.MissingSectionHeaderError, configparser.ParsingError, SystemExit) as e:
         if getattr(e, 'filename', False):
             if logger:
                 logger.error(e.filename + ' is not a valid configuration file')
